@@ -6,6 +6,8 @@ import os
 import asyncio 
 import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
 import webserver
+import uuid
+import datetime
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -193,6 +195,51 @@ async def student_info_command(ctx):
 
 
 # getting reactions and messages:
+intents = discord.Intents.default()
+intents.reactions = True
+intents.messages = True
+
+
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    # Ignoring bot's own reactions
+    if user.bot:
+        return
+
+    message = reaction.message
+
+    # Generate structured log data
+    log_entry = {
+        "action_id": str(uuid.uuid4()),  # Unique ID for this action
+        "user_id": str(user.id),
+        "action_type": "reaction_add",
+        "channel_id": str(message.channel.id),
+        "occurred_at": datetime.datetime.utcnow().isoformat(),  #timestamp
+        "message_id": str(message.id),
+        "message_text": message.content,
+        "reaction_emoji": str(reaction.emoji),
+        "url": message.jump_url,
+        "bot_command": None,  # Not a command, but field kept for structure
+        "created_at": datetime.datetime.utcnow().isoformat(),
+    }
+
+    # Print to console
+    print(log_entry)
+
+    # Write to file (optional) 
+    with open("reaction_logs.jsonl", "a", encoding="utf-8") as f:
+        f.write(f"{log_entry}\n")
+
+    
+
+bot.run('YOUR_BOT_TOKEN')
+
 
 # Retrieve the last two messages sent in the channel by anyone (excluding the bot)
 @bot.command()
