@@ -8,6 +8,8 @@ import os
 import asyncio 
 import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
 import webserver
+import uuid
+import datetime
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -214,5 +216,124 @@ async def on_member_join(member):
 async def student_info_command(ctx):
     await studentInfo(ctx.author)
 
+# getting reactions and messages:
+intents = discord.Intents.default()
+intents.reactions = True
+intents.messages = True
+
+
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    # Ignoring bot's own reactions
+    if user.bot:
+        return
+
+    message = reaction.message
+
+    # Generate structured log data
+    log_entry = {
+        "action_id": str(uuid.uuid4()),  # Unique ID for this action
+        "user_id": str(user.id),
+        "action_type": "reaction_add",
+        "channel_id": str(message.channel.id),
+        "occurred_at": datetime.datetime.utcnow().isoformat(),  #timestamp
+        "message_id": str(message.id),
+        "message_text": message.content,
+        "reaction_emoji": str(reaction.emoji),
+        "url": message.jump_url,
+        "bot_command": None,  # Not a command, but field kept for structure
+        "created_at": datetime.datetime.utcnow().isoformat(),
+    }
+
+    # Print to console
+    print(log_entry)
+
+    # Write to file (optional) 
+    with open("reaction_logs.jsonl", "a", encoding="utf-8") as f:
+        f.write(f"{log_entry}\n")
+
+    
+
+bot.run('YOUR_BOT_TOKEN')
+
+
+# Retrieve the last two messages sent in the channel by anyone (excluding the bot)
+@bot.command()
+async def retrieve(ctx):
+    messages = []
+    async for message in ctx.channel.history(limit=10):
+        if message.author != bot.user:
+            messages.append(message)
+        if len(messages) == 2:
+            break
+    if messages:
+        for msg in reversed(messages):
+            await ctx.send(f"Message from {msg.author.name}: {msg.content}")
+    else:
+        await ctx.send("No previous messages found.")
+
+# Retrieve the number of reactions on a specific message by message ID, and identify the users who reacted and how many reactions each user placed
+# Also, save the message ID and number of reactions per user in Student_data.csv
+@bot.command()
+async def retrieve_reactions(ctx, message_id: int):
+    try:
+        message = await ctx.channel.fetch_message(message_id)
+    except discord.NotFound:
+        await ctx.send("Message not found.")
+        return
+    except discord.Forbidden:
+        await ctx.send("I don't have permission to fetch that message.")
+        return
+    except discord.HTTPException:
+        await ctx.send("Failed to fetch the message due to an HTTP error.")
+        return
+
+    reaction_count = sum(reaction.count for reaction in message.reactions)
+    await ctx.send(f"Message ID {message_id} has {reaction_count} reactions.")
+
+    user_reaction_counts = {}
+    for reaction in message.reactions:
+        async for user in reaction.users():
+            if user == bot.user:
+                continue
+            user_reaction_counts[user] = user_reaction_counts.get(user, 0) + 1
+
+    if user_reaction_counts:
+        details = "\n".join(f"{user.name}: {count} reaction(s)" for user, count in user_reaction_counts.items())
+        await ctx.send(f"Users who reacted:\n{details}")
+
+        # Read all lines, update the user's line, and write back
+        async with aiofiles.open('Student_data.csv', mode='r', encoding='utf-8') as file:
+            lines = await file.readlines()
+
+        updated_lines = []
+        for line in lines:
+            parts = line.strip().split(',')
+            if len(parts) < 2:
+                updated_lines.append(line)
+                continue
+            username, userid = parts[0], parts[1]
+            # Check if this user reacted
+            user_obj = next((u for u in user_reaction_counts if str(u.id) == userid), None)
+            if user_obj:
+                # Append message_id and reaction count
+                new_line = line.strip() + f",message_id:{message_id},reactions:{user_reaction_counts[user_obj]}\n"
+                updated_lines.append(new_line)
+            else:
+                updated_lines.append(line)
+
+        async with aiofiles.open('Student_data.csv', mode='w', encoding='utf-8') as file:
+            await file.writelines(updated_lines)
+    else:
+        await ctx.send("No users reacted to this message.")
+
+
+=======
 webserver.keep_alive()  # Start the web server to keep the bot alive
 bot.run(token, log_handler=handler, log_level=logging.DEBUG) 
