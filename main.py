@@ -28,13 +28,16 @@ async def on_ready():
     for guild in bot.guilds:
         invite_cache[guild.id] = await guild.invites()
 
-#Detect if a user sends a message with the word "shit"
+#Detect if a user sends a message with the word "shit" or other banned words
+banned_words = ["shit", "sh!t","fuck", "sohai"]
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
 
-    if "shit" in message.content.lower():
+    content_lower = message.content.lower()
+    if any(bad in content_lower for bad in banned_words):
         await message.delete()
         await message.channel.send(f"That's not a nice word! Please refrain from using offensive language.")
         #await message.author.send(f"Your message was deleted because it contained inappropriate language: {message.content}")
