@@ -2,6 +2,7 @@ Flask
 python-dotenv
 discord.py==2.3.2
 
+APScheduler==3.10.4
 aiofiles==23.2.1
 gspread==6.0.2
 gspread-asyncio==2.0.0
