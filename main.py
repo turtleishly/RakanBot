@@ -5,6 +5,9 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import os
 import asyncio
+import uuid
+import discord
+import datetime
 
 #AI Community manager dependencies
 from groq import Groq
@@ -486,6 +489,120 @@ async def respond(ctx, *, answer: str):
     })
     save_engage_activity(engage_activity)
     await ctx.send("Your response and the AI's reply have been recorded!")
+
+# -------------
+# weekly reaction logger
+# -------------
+from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
+
+# Initialize discord (i scared so i type whole thing again) 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import datetime
+import discord
+from discord.ext import commands
+
+# Create intents object
+intents = discord.Intents.default()
+intents.message_content = True
+intents.reactions = True
+intents.members = True
+
+# Create bot with intents
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Create APScheduler
+scheduler = AsyncIOScheduler()
+
+# List of channels to track (since we wanna know more on student engagement so priority are the student-accessible channels/not admin ones)
+CHANNEL_IDS_TO_TRACK = [
+    1345397894030557238,  # general
+    1363897375990747157,  # discussion
+    1378669054285582427,  #ai-jokes and memes
+    1349385352313442385,  #1a
+    1351537746149244939,  #1b
+    1349385520639381607,  #1c
+    1349385551987478559,  #1d --will update the other modules in future
+    1374554509845598228,  #further resources
+    
+]
+
+# Google Sheets API setup
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SPREADSHEET_ID = 'https://docs.google.com/spreadsheets/d/1m1X3-VW8dXwRe2-PCRhxKkHi_-fKLFzOqIKOgfwAg4k/edit?gid=0#gid=0'
+RANGE_NAME = 'Sheet1!A2:K2'  # Adjust range from sheets
+
+# Credentials for Google Sheets API
+creds = Credentials.from_service_account_file('path-to-credentials.json', scopes=SCOPES)
+service = build('sheets', 'v4', credentials=creds)
+sheet = service.spreadsheets()
+
+# Function to append data to Google Sheets
+def append_to_sheet(data):
+    """Appends a row to the Google Sheet"""
+    request = sheet.values().append(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME,
+                                     valueInputOption="RAW", body={"values": [data]})
+    response = request.execute()
+
+# Event: Called when a user adds a reaction
+@bot.event
+async def weekly_log_reactions():
+    # Loop through each guild (server) the bot is in
+    for guild in bot.guilds:
+        # Loop through only the channels in `CHANNEL_IDS_TO_TRACK`
+        for channel in guild.text_channels:
+            if channel.id in CHANNEL_IDS_TO_TRACK:  # Check if the channel is in the list
+                try:
+                    print(f"Fetching messages from channel: {channel.name}")
+                    # Fetch the most recent 150 messages from the channel
+                    messages = await channel.history(limit=150).flatten()
+
+                    # Loop through each message
+                    for message in messages:
+                        # Check if the message has reactions
+                        if message.reactions:
+                            for reaction in message.reactions:
+                                # Log each reaction (this can be customized to log to Google Sheets)
+                                print(f"Logged reaction: {reaction.emoji} on message: {message.id} in channel {channel.name}")
+
+                                # Retrieve necessary data from the reaction event
+                                action_id = str(reaction.message.id) + str(reaction.emoji)
+                                user_id = user.id
+                                action_type = 'reaction_add'
+                                channel_id = str(message.channel.id)
+                                occurred_at = datetime.datetime.utcnow().isoformat()
+                                message_id = str(message.id)
+                                message_text = message.content
+                                reaction_emoji = str(reaction.emoji)
+                                url = message.jump_url  # URL of the message
+                                bot_command = ''  # Placeholder for bot commands if any
+                                created_at = datetime.datetime.utcnow().isoformat()
+
+                                # Here you would replace this print with Google Sheets logging
+                                data = [action_id, user_id, action_type, channel_id, occurred_at, message_id, message_text, 
+                                        reaction_emoji, url, bot_command, created_at]
+                                append_to_sheet(data)  # Replace this function with your Google Sheets code
+
+                except Exception as e:
+                    print(f"Error in channel {channel.name}: {e}")
+
+# Schedule the task to run weekly
+scheduler.add_job(weekly_log_reactions, 'interval', weeks=1, start_date=datetime.datetime.now())
+
+# Discord bot event: Called when the bot is ready
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
+    # Start the scheduler when the bot is ready
+    scheduler.start()
+    # check the channels in the server dynamically (just optional stuff)
+    #for guild in client.guilds:
+        #print(f"Connected to guild: {guild.name}")
+        #for channel in guild.text_channels:
+            #print(f"Channel: {channel.name}, Channel ID: {channel.id}")
+
+
+
 
 bot.run(Discord_token)
 
