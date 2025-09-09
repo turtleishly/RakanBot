@@ -25,7 +25,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Server IDs
 ENGLISH_SERVER_ID = 1345397894030557234
 INDONESIAN_SERVER_ID = 1405443776083918900
-bad_words_en = ["shit", "fuck", "bitch", "sohai", "babi"]  # Example English list
+bad_words_en = ["shit", "fuck", "bitch", "sohai", "babi","sh!t"]  # Example English list
 bad_words_id = ["bangsat", "kontol", "memek", "goblok", "anjir"]  # Example Indonesian list
 
 # Keep a cache of invites
@@ -121,7 +121,7 @@ MESSAGES = {
 # ======================
 # Question Helpers
 # ======================
-async def ask_question(member, guild_id, question_text, options, timeout=60):
+async def ask_question(member, guild_id, question_text, options, timeout=60*15):
     messages = MESSAGES[guild_id]
     option_text = "\n".join([f"{emoji} {text}" for emoji, text in options])
     msg = await member.send(f"{question_text}\n\n{option_text}")
@@ -143,7 +143,7 @@ async def ask_question(member, guild_id, question_text, options, timeout=60):
         return None
 
 
-async def ask_text_response(member, guild_id, prompt, max_length=64, timeout=60):
+async def ask_text_response(member, guild_id, prompt, max_length=64, timeout=60*15):
     messages = MESSAGES[guild_id]
     await member.send(messages["name"].format(prompt=prompt, max_length=max_length))
 
@@ -285,9 +285,11 @@ client = Groq(
     api_key=token, 
 )
 
-def generate_engagement_question():
+def generate_engagement_question(subject=None):
+    if not subject:
+        subject = "Recent news"
     # Fetch recent news (returns list of dicts)
-    news_results = fetch_news_with_content_exa(query="Recent news", location="Malaysia", num_results=3, max_characters=500)
+    news_results = fetch_news_with_content_exa(query=subject, location="Malaysia", num_results=3, max_characters=500)
     # Combine news snippets/titles for the prompt
     news_summaries = []
     for item in news_results:
@@ -299,8 +301,8 @@ def generate_engagement_question():
     ENGAGEMENT_PROMPT = (
         "You are an AI tutor. Here is some recent news:\n"
         f"{news_context}\n"
-        "First, only choose ONE news to cover briefly. Then explain the news in simple terms for students. "
-        "Then, ask one creative, open-ended question about AI or machine learning connected to it. "
+        "First, only choose ONE news to cover briefly. Then explain the news in simple terms to me. Start the sentence with 'recently,..' "
+        "Then, ask one creative, open-ended question about AI or machine learning connected to it. provide details, ask specific questions instead of questions too general."
         "Keep it under 2000 characters, preferably around 1000."
     )
     messages = [
@@ -315,9 +317,11 @@ def generate_engagement_question():
     )
     return chat_completion.choices[0].message.content
 
-def generate_engagement_question_indonesian():
+def generate_engagement_question_indonesian(subject=None):
+    if not subject:
+        subject = "Berita terbaru"
     # Ambil berita terbaru (mengembalikan list of dicts)
-    news_results = fetch_news_with_content_exa(query="Berita AI", location="Indonesia", num_results=3, max_characters=500)
+    news_results = fetch_news_with_content_exa(query=subject, location="Indonesia", num_results=3, max_characters=500)
     # Gabungkan ringkasan berita/judul untuk prompt
     news_summaries = []
     for item in news_results:
@@ -329,7 +333,7 @@ def generate_engagement_question_indonesian():
     ENGAGEMENT_PROMPT = (
         "Anda adalah seorang tutor AI. Berikut adalah beberapa berita terbaru:\n"
         f"{news_context}\n"
-        "Pertama, pilih hanya SATU berita untuk dibahas secara singkat. Kemudian jelaskan berita tersebut dengan sederhana untuk siswa. "
+        "Pertama, pilih hanya SATU berita untuk dibahas secara singkat. Kemudian jelaskan berita tersebut dengan sederhana kepada saya. "
         "Setelah itu, ajukan satu pertanyaan kreatif dan terbuka tentang AI atau machine learning yang berhubungan dengan berita tersebut. "
         "Jaga agar jawaban di bawah 2000 karakter, idealnya sekitar 1000 karakter. Tulis dalam Bahasa Indonesia."
     )
@@ -377,7 +381,7 @@ engage_activity = load_engage_activity()
 engage_questions_by_id = {}
 
 @bot.command(name="engage")
-async def engage(ctx):
+async def engage(ctx, *, subject=None):
     # Notification line based on language
     if ctx.guild.id == ENGLISH_SERVER_ID:
         notif_line = "If you enjoy these challenges, react to this message to get notified of more!"
@@ -388,8 +392,8 @@ async def engage(ctx):
     role = await get_or_create_role(ctx.guild, "enthusiast")
     # Send the role mention (ping)
     await ctx.send(f"{role.mention}")
-    
-    question = generate_engagement_question() if ctx.guild.id == ENGLISH_SERVER_ID else generate_engagement_question_indonesian()
+
+    question = generate_engagement_question(subject=subject) if ctx.guild.id == ENGLISH_SERVER_ID else generate_engagement_question_indonesian(subject=subject)
     full_message = f"{question}\n\n{notif_line}"
     
     sent_msgs = []
@@ -498,6 +502,8 @@ bot.run(Discord_token)
 # to create the venv 32: C:\Users\Aiden\AppData\Local\Programs\Python\Python38-32\python.exe -m venv myenv32
 
 #Current (1/9) LLM Version: Need to put in Sys_prompt.txt
+
+# Pyinstaller command to include the text file needed for groq
 '''
 python -m PyInstaller main.py `
   "--add-data=myenv32\Lib\site-packages\setuptools\_vendor\jaraco\text\Lorem ipsum.txt;setuptools/_vendor/jaraco/text"
