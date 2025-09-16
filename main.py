@@ -524,6 +524,8 @@ async def on_error(event_method, *args, **kwargs):
             print(f"Failed to DM owner {owner_id}: {e}")
     print(message)
 
+bot.run(Discord_token)
+
 #Use venv 32: .\myenv32\Scripts\Activate.ps1
 #Pyinstaller guide for running on local old PC: Using pyenv, 3.8.0, need win32 version; might need to delete "dist or build"
 # Run this: python -m PyInstaller main.py
