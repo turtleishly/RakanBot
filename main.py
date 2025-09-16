@@ -491,7 +491,38 @@ async def respond(ctx, *, answer: str):
     save_engage_activity(engage_activity)
     await ctx.send("Your response and the AI's reply have been recorded!")
 
-bot.run(Discord_token)
+
+# ==============================
+# Error Handling
+# ==============================
+# Error handler: DM owner(s) on error
+OWNER_IDS = [484723983900737538, 1346839447995420749]  # User IDs to notify on error
+
+@bot.event
+async def on_command_error(ctx, error):
+    error_message = f"Error in command '{ctx.command}': {error}"
+    for owner_id in OWNER_IDS:
+        try:
+            owner = await bot.fetch_user(owner_id)
+            await owner.send(error_message)
+        except Exception as e:
+            print(f"Failed to DM owner {owner_id}: {e}")
+    # Optionally, also send error to the channel
+    await ctx.send("An error occurred. The bot owner has been notified.")
+
+# Global error handler for uncaught errors
+@bot.event
+async def on_error(event_method, *args, **kwargs):
+    import traceback
+    error_details = traceback.format_exc()
+    message = f"Global error in event '{event_method}':\n{error_details}"
+    for owner_id in OWNER_IDS:
+        try:
+            owner = await bot.fetch_user(owner_id)
+            await owner.send(message)
+        except Exception as e:
+            print(f"Failed to DM owner {owner_id}: {e}")
+    print(message)
 
 #Use venv 32: .\myenv32\Scripts\Activate.ps1
 #Pyinstaller guide for running on local old PC: Using pyenv, 3.8.0, need win32 version; might need to delete "dist or build"
