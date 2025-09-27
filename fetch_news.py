@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 EXA_API_KEY = os.getenv("EXA_API_KEY")
 
+#using this so that it is compatible with python 3.8
 def fetch_news_with_content_exa(api_key=EXA_API_KEY, query="Recent news", location="United States", num_results=1, max_characters=1000):
     url = "https://api.exa.ai/search"
     headers = {
