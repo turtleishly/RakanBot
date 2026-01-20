@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 import os
 import asyncio
 import re
+import csv
+from datetime import datetime, timezone, timedelta
 
 #AI Community manager dependencies
 from groq import Groq
@@ -29,11 +31,167 @@ bad_words_id = ["bangsat", "kontol", "memek", "goblok", "anjir"]  # Example Indo
 # Keep a cache of invites
 invite_cache = {}
 
-@bot.event
-async def on_ready():
-    print(f"We are ready to go in, {bot.user.name}")
+#========================================Student Survey CSV Handling===================================
+CSV_FILE = "students.csv"
+FIELDNAMES = [
+    "Discord ID",
+    "Username",
+    "Server ID",
+    "Join Method",
+    "Roles",
+    "Full Name",
+    "State",
+    "School",
+    "Gender",
+    "Used Discord",
+    "Form",
+    "Timestamp",
+    "Invite Code",
+]
+
+
+def ensure_csv_headers():
+    if not os.path.exists(CSV_FILE) or os.path.getsize(CSV_FILE) == 0:
+        with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+            writer.writeheader()
+        return
+    with open(CSV_FILE, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames == FIELDNAMES:
+            return
+        rows = list(reader)
+    with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in FIELDNAMES})
+
+
+def load_csv_rows():
+    ensure_csv_headers()
+    with open(CSV_FILE, "r", newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def write_csv_rows(rows):
+    with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def format_member_roles(member):
+    roles = [role.name for role in getattr(member, "roles", []) if role.name != "@everyone"]
+    return ", ".join(roles) if roles else "None"
+
+
+def format_timestamp(value):
+    malaysia_tz = timezone(timedelta(hours=8))
+    if not value:
+        return ""
+    if isinstance(value, str):
+        return value.split(".")[0][:19]
+    if isinstance(value, datetime):
+        # Convert to Malaysia time if not already
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        value = value.astimezone(malaysia_tz)
+        return value.replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+    return str(value)
+
+def ensure_student_row(user_id, username, server_id, join_method=None, roles="", invite_code=None, join_timestamp=None):
+    rows = load_csv_rows()
+    user_id_str = str(user_id)
+    updated = False
+    for row in rows:
+        if row["Discord ID"] == user_id_str and row["Server ID"] == str(server_id):
+            row["Username"] = username
+            row["Server ID"] = str(server_id)
+            if join_method:
+                if not row["Join Method"] or row["Join Method"] == "Existing" or join_method != "Existing":
+                    row["Join Method"] = join_method
+            row["Roles"] = roles
+            if invite_code:
+                row["Invite Code"] = invite_code
+            if join_timestamp:
+                formatted_join = format_timestamp(join_timestamp)
+                if formatted_join:
+                    row["Timestamp"] = formatted_join
+            updated = True
+            break
+    if not updated:
+        new_row = {key: "" for key in FIELDNAMES}
+        new_row["Discord ID"] = user_id_str
+        new_row["Username"] = username
+        new_row["Server ID"] = str(server_id)
+        new_row["Join Method"] = join_method or ""
+        new_row["Roles"] = roles
+        if invite_code:
+            new_row["Invite Code"] = invite_code
+        if join_timestamp:
+            formatted_join = format_timestamp(join_timestamp)
+            if formatted_join:
+                new_row["Timestamp"] = formatted_join
+        rows.append(new_row)
+    write_csv_rows(rows)
+
+
+def save_survey_answer(user_id, username, server_id, student_name, state, school, gender, used_discord, selected_form, invite_code=None):
+    rows = load_csv_rows()
+    user_id_str = str(user_id)
+    for row in rows:
+        if row["Discord ID"] == user_id_str:
+            row["Username"] = username
+            row["Server ID"] = str(server_id)
+            row["Full Name"] = student_name
+            row["State"] = state
+            row["School"] = school
+            row["Gender"] = gender
+            row["Used Discord"] = True if used_discord else False
+            row["Form"] = selected_form
+            if invite_code:
+                row["Invite Code"] = invite_code
+            break
+    else:
+        new_row = {key: "" for key in FIELDNAMES}
+        new_row["Discord ID"] = user_id_str
+        new_row["Username"] = username
+        new_row["Server ID"] = str(server_id)
+        new_row["Full Name"] = student_name
+        new_row["State"] = state
+        new_row["School"] = school
+        new_row["Gender"] = gender
+        new_row["Used Discord"] = True if used_discord else False
+        new_row["Form"] = selected_form
+        if invite_code:
+            new_row["Invite Code"] = invite_code
+        rows.append(new_row)
+    write_csv_rows(rows)
+
+
+ensure_csv_headers()
+
+
+async def log_existing_members():
     for guild in bot.guilds:
-        invite_cache[guild.id] = await guild.invites()
+        if guild.id not in [ENGLISH_SERVER_ID, INDONESIAN_SERVER_ID]:
+            continue
+        for member in guild.members:
+            if member.bot:
+                continue
+            ensure_student_row(
+                member.id,
+                member.name,
+                guild.id,
+                join_method="Existing",
+                roles=format_member_roles(member),
+                join_timestamp=member.joined_at
+            )
+
+
+#========================================Student Survey CSV Handling===================================
+
 
 # Bad word filter
 @bot.event
@@ -64,7 +222,7 @@ STATE_SCHOOLS = {
         "Sarawak": ["St. Joseph", "St. Theresa", "Swinburne", "Sg Tapang"],
         "Kedah": ["Keat Hwa"],
         "Selangor": ["Puchong Utama 1"],
-        "NGO": ["Tutor in Action", "Sri Eden"],
+        "NGO": ["Tutor in Action", "Sri Eden", "Teacher"],
         "University": ["Swinburne Uni"]
     },
     INDONESIAN_SERVER_ID: {
@@ -127,6 +285,7 @@ async def ask_question(member, guild_id, question_text, options, timeout=60*15):
     for emoji, _ in options:
         try:
             await msg.add_reaction(emoji)
+            await asyncio.sleep(0.35)
         except discord.Forbidden:
             print(messages["forbidden2"].format(member=member))
 
@@ -225,11 +384,6 @@ async def studentInfo(member, guild_id):
         if not selected_form:
             return
 
-        # Save to Sheets
-        from datetime import datetime, timedelta, timezone
-        malaysia_tz = timezone(timedelta(hours=8))
-        timestamp = datetime.now(malaysia_tz).strftime('%Y-%m-%d %H:%M:%S')
-
         used_invite_code = None
         if hasattr(member, 'guild') and member.guild is not None:
             invites_before = invite_cache.get(member.guild.id, [])
@@ -241,8 +395,26 @@ async def studentInfo(member, guild_id):
                     break
             invite_cache[member.guild.id] = invites_after
 
-        import RakanSheets
-        RakanSheets.save_to_google_sheets([[student_name, member.name, member.id, selected_state, selected_school, selected_gender, used_discord, selected_form, timestamp, used_invite_code, guild_id]])
+        ensure_student_row(
+            member.id,
+            member.name,
+            guild_id,
+            roles=format_member_roles(member),
+            invite_code=used_invite_code,
+            join_timestamp=member.joined_at
+        )
+        save_survey_answer(
+            member.id,
+            member.name,
+            guild_id,
+            student_name,
+            selected_state,
+            selected_school,
+            selected_gender,
+            used_discord,
+            selected_form,
+            invite_code=used_invite_code,
+        )
         await member.send(messages["thanks"])
 
     except discord.Forbidden:
@@ -255,6 +427,30 @@ async def studentInfo(member, guild_id):
 @bot.event
 async def on_member_join(member):
     guild_id = member.guild.id
+    used_invite_code = None
+    invites_before = invite_cache.get(guild_id, [])
+    try:
+        invites_after = await member.guild.invites()
+    except discord.Forbidden:
+        invites_after = invites_before
+    else:
+        for after in invites_after:
+            before = next((i for i in invites_before if i.code == after.code), None)
+            if before and before.uses < after.uses:
+                used_invite_code = after.code
+                break
+        invite_cache[guild_id] = invites_after
+
+    ensure_student_row(
+        member.id,
+        member.name,
+        guild_id,
+        join_method=used_invite_code or "Invite",
+        roles=format_member_roles(member),
+        invite_code=used_invite_code,
+        join_timestamp=member.joined_at 
+    )
+
     if guild_id not in MESSAGES:
         return
     try:
@@ -513,6 +709,13 @@ async def on_error(event_method, *args, **kwargs):
         except Exception as e:
             print(f"Failed to DM owner {owner_id}: {e}")
     print(message)
+
+@bot.event
+async def on_ready():
+    print(f"We are ready to go in, {bot.user.name}")
+    for guild in bot.guilds:
+        invite_cache[guild.id] = await guild.invites()
+    await log_existing_members()
 
 bot.run(Discord_token)
 
