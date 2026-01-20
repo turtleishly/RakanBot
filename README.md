@@ -1,17 +1,20 @@
-RakanBot 
+RakanBot has two main functions
 
-Hey all, we need to collect raw data that measures metrics like reactions, messages, etc. from students to know stuff like user completion rate of modules. We also collect information like state, school, data, for other analysis. 
+1) Data collection
+- Calling !collect_all in a server will generate a csv file with most information available on the server. (Messages, reactions, time joined, etc.) 
+- Automatically starting a survey for new members, collecting their demographic information, saved to students.csv
 
-Currently (28/7), I've gotten it to be able to send dm polls to users to collect demographic data, which I plan on executing every time a new user onboards. It can also somewhat track reactions on every message, telling you who reacted. 
+2) AI community manager chatbot
+- Majority of the code is in LLM.py
 
-Setting up the discord bot / quick start: https://youtu.be/YD_N6Ffoojw?si=mxyD7X8bxa6anpyG 
+SETUP 
+1) Download this file structure in a local environment
+2) You may need to install python 3.8.0, and all the libraries in requirements.txt
+3) You will need the Discord keys (Get this from me), and a groq and exa key for the chatbot side to work.
+4) running main.py should get the bot up and running
 
-Getting the bot to stay on permanantly, and rendering it on render: https://www.youtube.com/watch?v=HZis54wRF98
 
-Saving the demographic data to gsheets: https://youtu.be/sVURhxyc6jE?si=HndjlI8jJ50FnqZv
+note to whichever poor soul that needs to read this: When I coded this, only god and I knew how it worked. Now, only god knows. There is probably a lot of junk which I don't know if is necessary for the bot to work. I profusely apologize. 
 
-Code was mainly written by copilot. 
+Further info: The bot is running on my old computer 24/7. That's the server. It's on windows 32 and hence you may find success in using a 32 bit interpreter instead of the 64 bit one. 
 
-To access the bot, you will need the key (Token) from me (Aiden/ Kee Woo Jer). Send me your House address and I'll mail it to you. 
-
-Just kidding, I'll probably DM it to you on WhatsApp.
